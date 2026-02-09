@@ -840,15 +840,30 @@ function getCantieriAssegnati() {
     
     // Operator: filtra in base ai cantieri assegnati
     const userEmail = currentUser.username || currentUser.email;
-    const utenteCorrente = utentiData.find(u => 
-        u.email.toLowerCase() === userEmail.toLowerCase()
-    );
     
-    if (!utenteCorrente || !utenteCorrente.cantieriAssegnati) {
-        // Nessun cantiere assegnato
+    console.log('🔍 DEBUG getCantieriAssegnati:');
+    console.log('  userEmail:', userEmail);
+    console.log('  utentiData.length:', utentiData.length);
+    console.log('  utentiData:', utentiData);
+    
+    const utenteCorrente = utentiData.find(u => {
+        console.log(`  Confronto: "${u.email.toLowerCase()}" === "${userEmail.toLowerCase()}"`, u.email.toLowerCase() === userEmail.toLowerCase());
+        return u.email.toLowerCase() === userEmail.toLowerCase();
+    });
+    
+    console.log('  utenteCorrente trovato:', utenteCorrente);
+    
+    if (!utenteCorrente) {
+        console.log(`⚠️ Utente ${userEmail} non trovato in utentiData`);
+        return [];
+    }
+    
+    if (!utenteCorrente.cantieriAssegnati) {
         console.log(`⚠️ Nessun cantiere assegnato a ${userEmail}`);
         return [];
     }
+    
+    console.log('  cantieriAssegnati (raw):', utenteCorrente.cantieriAssegnati);
     
     // Estrai gli ID dei cantieri assegnati
     const cantieriIds = utenteCorrente.cantieriAssegnati
@@ -856,10 +871,14 @@ function getCantieriAssegnati() {
         .map(id => id.trim())
         .filter(id => id);
     
+    console.log('  cantieriIds array:', cantieriIds);
+    
     // Filtra i cantieri
-    const cantieriAssegnati = cantieriData.filter(c => 
-        cantieriIds.includes(String(c.id))
-    );
+    const cantieriAssegnati = cantieriData.filter(c => {
+        const match = cantieriIds.includes(String(c.id));
+        console.log(`  Cantiere ${c.id} (${c.title}): ${match ? '✅ INCLUSO' : '❌ ESCLUSO'}`);
+        return match;
+    });
     
     console.log(`🔍 Operator ${userEmail}: ${cantieriAssegnati.length}/${cantieriData.length} cantieri assegnati`);
     
@@ -961,6 +980,10 @@ async function initializeApp() {
         await getUserListId();
         await loadCurrentUserRole();
         
+        // IMPORTANTE: Carica utenti PRIMA dei cantieri
+        // Gli Operator hanno bisogno di sapere quali cantieri sono assegnati
+        await loadUtenti();
+        
         // Carica dati iniziali
         await loadCantieri();
         
@@ -975,11 +998,6 @@ async function initializeApp() {
         
         // Popola filtri
         populateFilters();
-        
-        // Carica utenti (solo per admin)
-        if (currentUserRole === 'admin') {
-            await loadUtenti();
-        }
         
         showMessage('Benvenuto! Connesso a SharePoint.', 'success');
         
@@ -1219,17 +1237,28 @@ async function loadGiornali() {
                     id: giornaliData[0].id,
                     author: giornaliData[0].author,
                     authorEmail: giornaliData[0].authorEmail,
-                    title: giornaliData[0].title
+                    title: giornaliData[0].title,
+                    cantiereId: giornaliData[0].cantiereId
                 });
             }
+            
+            // Ottieni i cantieri assegnati all'Operator
+            const cantieriAssegnatiOperator = getCantieriAssegnati();
+            const cantieriAssegnatiIds = cantieriAssegnatiOperator.map(c => String(c.id));
+            console.log('  Cantieri assegnati all\'Operator:', cantieriAssegnatiIds);
             
             giornaliData = giornaliData.filter(g => {
                 // Confronta con l'email dell'autore (più affidabile) o con il nome
                 const authorEmailMatch = g.authorEmail && g.authorEmail.toLowerCase() === userEmail;
                 const authorNameMatch = g.author === userName;
-                const match = authorEmailMatch || authorNameMatch;
+                const isAuthor = authorEmailMatch || authorNameMatch;
                 
-                console.log(`  Giornale ${g.id}: author="${g.author}", authorEmail="${g.authorEmail}", match=${match}`);
+                // Verifica che il giornale sia di un cantiere assegnato
+                const cantiereAssegnato = cantieriAssegnatiIds.includes(String(g.cantiereId));
+                
+                const match = isAuthor && cantiereAssegnato;
+                
+                console.log(`  Giornale ${g.id}: author="${g.author}", authorEmail="${g.authorEmail}", cantiereId="${g.cantiereId}", isAuthor=${isAuthor}, cantiereAssegnato=${cantiereAssegnato}, match=${match}`);
                 
                 return match;
             });
@@ -4573,13 +4602,42 @@ async function loadUtenti() {
         
         const data = await response.json();
         
-        utentiData = data.value.map(item => ({
-            id: item.id,
-            email: item.fields.Title,
-            nome: item.fields.Nome || 'N/A',
-            ruolo: (item.fields.Ruolo || 'operator').toLowerCase(),
-            cantieriAssegnati: item.fields.CantieriAssegnati || ''
-        }));
+        utentiData = data.value.map(item => {
+            // DEBUG: Log del primo utente per vedere la struttura completa
+            if (utentiData.length === 0) {
+                console.log('📋 DEBUG - Primo utente completo:', item.fields);
+                console.log('📋 DEBUG - CantieriAssegnati raw:', item.fields.CantieriAssegnati);
+            }
+            
+            // Gestisci il campo CantieriAssegnati che potrebbe essere:
+            // - Una stringa con ID separati da virgola: "1,2,3"
+            // - Un array di oggetti Lookup: [{LookupId: 1}, {LookupId: 2}]
+            // - Un array di ID: [1, 2, 3]
+            let cantieriAssegnati = '';
+            
+            if (item.fields.CantieriAssegnati) {
+                if (Array.isArray(item.fields.CantieriAssegnati)) {
+                    // È un array - potrebbe essere di oggetti Lookup o di ID
+                    cantieriAssegnati = item.fields.CantieriAssegnati
+                        .map(c => c.LookupId || c)
+                        .join(',');
+                } else if (typeof item.fields.CantieriAssegnati === 'string') {
+                    // È già una stringa
+                    cantieriAssegnati = item.fields.CantieriAssegnati;
+                } else if (typeof item.fields.CantieriAssegnati === 'object') {
+                    // È un singolo oggetto Lookup
+                    cantieriAssegnati = String(item.fields.CantieriAssegnati.LookupId || '');
+                }
+            }
+            
+            return {
+                id: item.id,
+                email: item.fields.Title,
+                nome: item.fields.Nome || 'N/A',
+                ruolo: (item.fields.Ruolo || 'operator').toLowerCase(),
+                cantieriAssegnati: cantieriAssegnati
+            };
+        });
         
         console.log(`👥 Caricati ${utentiData.length} utenti`);
         displayUtenti();

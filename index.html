@@ -270,6 +270,7 @@ Esporta report mensile in PDF o tutti i punti mappa in GeoJSON per un cantiere
 <div class="form-group">
 <label>Località *</label>
 <input type="text" id="fLoc" required placeholder="es. Poirino, Via Indipendenza 56">
+<p style="font-size:12px;color:#666;margin-top:5px">💡 Suggerimento: posiziona il punto sulla mappa per ottenere automaticamente l'indirizzo</p>
 </div>
 
 <div class="form-group">
@@ -634,6 +635,7 @@ Esporta report mensile in PDF o tutti i punti mappa in GeoJSON per un cantiere
 <div class="form-group">
 <label>Località *</label>
 <input type="text" id="editLocalita" required placeholder="es. Poirino, Via Indipendenza 56">
+<p style="font-size:12px;color:#666;margin-top:5px">💡 Suggerimento: posiziona il punto sulla mappa per ottenere automaticamente l'indirizzo</p>
 </div>
 
 <div class="form-group">
@@ -1901,6 +1903,9 @@ function initMap() {
         
         // Mostra coordinate
         document.getElementById('mapCoords').textContent = ` (${lat}, ${lng})`;
+        
+        // Chiama reverse geocoding per compilare automaticamente la località
+        reverseGeocode(lat, lng, false);
     });
     
     // Fix per dimensioni mappa - ridimensiona più volte per sicurezza
@@ -1913,6 +1918,81 @@ function initMap() {
     setTimeout(() => {
         if (map) map.invalidateSize();
     }, 600);
+}
+
+// Funzione di reverse geocoding - ottiene indirizzo da coordinate
+async function reverseGeocode(lat, lng, isEditMode = false) {
+    try {
+        console.log(`🌍 Reverse geocoding per: ${lat}, ${lng}`);
+        
+        // Chiamata API Nominatim di OpenStreetMap
+        const response = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&addressdetails=1&accept-language=it`,
+            {
+                headers: {
+                    'User-Agent': 'Akhet-GiornaleLavori/1.0' // Richiesto da Nominatim
+                }
+            }
+        );
+        
+        if (!response.ok) {
+            throw new Error(`Errore API: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        console.log('📍 Dati indirizzo ricevuti:', data);
+        
+        // Estrai comune e località
+        const address = data.address || {};
+        
+        // Possibili campi per il comune (in ordine di priorità)
+        const comune = address.city || 
+                      address.town || 
+                      address.village || 
+                      address.municipality || 
+                      address.county || 
+                      '';
+        
+        // Possibili campi per la via/località
+        const via = address.road || 
+                   address.pedestrian || 
+                   address.path || 
+                   '';
+        
+        const civico = address.house_number || '';
+        
+        // Componi l'indirizzo finale: "Comune" o "Comune, Via" o "Comune, Via Civico"
+        let località = comune;
+        
+        if (via) {
+            località = `${comune}, ${via}`;
+            if (civico) {
+                località = `${comune}, ${via} ${civico}`;
+            }
+        }
+        
+        if (località) {
+            // Aggiorna il campo località
+            const locField = isEditMode ? document.getElementById('editLocalita') : document.getElementById('fLoc');
+            if (locField) {
+                locField.value = località;
+                console.log(`✅ Località compilata: ${località}`);
+                
+                // Feedback visivo temporaneo
+                locField.style.backgroundColor = '#d4edda';
+                setTimeout(() => {
+                    locField.style.backgroundColor = '';
+                }, 1500);
+            }
+        } else {
+            console.warn('⚠️ Indirizzo non trovato per queste coordinate');
+        }
+        
+    } catch (error) {
+        console.error('❌ Errore reverse geocoding:', error);
+        // Non mostriamo errore all'utente per non essere invasivi
+        // L'utente può sempre compilare manualmente
+    }
 }
 
 function resetMap() {
@@ -1964,6 +2044,9 @@ function geolocateMe() {
             
             // Mostra coordinate
             document.getElementById('mapCoords').textContent = ` (${lat}, ${lng})`;
+            
+            // Chiama reverse geocoding per compilare automaticamente la località
+            reverseGeocode(lat, lng, false);
             
             // Stato successo
             gpsButton.classList.remove('loading');
@@ -2047,6 +2130,9 @@ function initEditMap() {
         
         // Mostra coordinate
         document.getElementById('editMapCoords').textContent = ` (${lat}, ${lng})`;
+        
+        // Chiama reverse geocoding per compilare automaticamente la località
+        reverseGeocode(lat, lng, true);
     });
     
     // Fix per dimensioni mappa
@@ -2131,6 +2217,9 @@ function geolocateEditMap() {
             
             // Mostra coordinate
             document.getElementById('editMapCoords').textContent = ` (${lat}, ${lng})`;
+            
+            // Chiama reverse geocoding per compilare automaticamente la località
+            reverseGeocode(lat, lng, true);
             
             // Stato successo
             gpsButton.classList.remove('loading');

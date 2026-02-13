@@ -3014,7 +3014,7 @@ async function exportPDF(id) {
         try {
             // Logo: 136x150px -> rapporto 0.907
             // Altezza fissa 15mm -> larghezza = 15 * 0.907 = 13.6mm
-            doc.addImage(logoBase64, 'PNG', pageWidth - margin - 14, y + 2, 13.6, 15);
+            doc.addImage(logoBase64, 'PNG', pageWidth - margin - 18, y + 2, 13.6, 15);
         } catch (e) {
             console.warn('Errore nel caricamento logo:', e);
         }
@@ -3076,14 +3076,14 @@ async function exportPDF(id) {
         
         doc.setFont(undefined, 'bold');
         doc.setFontSize(8);
-        doc.text('LOCALITÀ', col4_1 + 2, y + 5);
-        doc.text('CODICE SITO', col4_2 + 2, y + 5);
+        doc.text('CODICE SITO', col4_1 + 2, y + 5);
+        doc.text('LOCALITÀ', col4_2 + 2, y + 5);
         doc.text('CONDIZIONI METEO', col4_3 + 2, y + 5);
         doc.text('AGIBILITÀ', col4_4 + 2, y + 5);
         
         doc.setFont(undefined, 'normal');
-        doc.text(String(g.title || ''), col4_1 + 2, y + rowHeight + 5);
-        doc.text(String(g.codiceSito || ''), col4_2 + 2, y + rowHeight + 5);
+        doc.text(String(g.codiceSito || ''), col4_1 + 2, y + rowHeight + 5);
+        doc.text(String(g.title || ''), col4_2 + 2, y + rowHeight + 5);
         doc.text(String(g.meteo || ''), col4_3 + 2, y + rowHeight + 5);
         doc.text(String(g.agibilita || ''), col4_4 + 2, y + rowHeight + 5);
         
@@ -3152,18 +3152,18 @@ async function exportPDF(id) {
         y += 5;
         
         const lavoriText = g.lavori || '';
-        const lavoriLines = doc.splitTextToSize(lavoriText, contentWidth - 4);
-        const lavoriHeight = Math.max(30, lavoriLines.length * 4 + 4);
+        doc.setFont(undefined, 'normal');
+        doc.setFontSize(8);
+        const lavoriLines = doc.splitTextToSize(lavoriText, contentWidth - 6);
+        const lavoriHeight = Math.max(30, lavoriLines.length * 4.5 + 6);
         
         doc.rect(margin, y, contentWidth, lavoriHeight);
         
-        doc.setFont(undefined, 'normal');
-        doc.setFontSize(8);
-        let textY = y + 4;
+        let textY = y + 5;
         lavoriLines.forEach(line => {
             if (textY < y + lavoriHeight - 2) {
-                doc.text(line, margin + 2, textY);
-                textY += 4;
+                doc.text(line, margin + 3, textY);
+                textY += 4.5;
             }
         });
         doc.setFontSize(9);
@@ -3179,7 +3179,7 @@ async function exportPDF(id) {
             }
             
             doc.setFont(undefined, 'bold');
-            doc.text('IMMAGINI FOTOGRAFICHE', margin, y);
+            doc.text('FOTOGRAFIE', margin, y);
             y += 5;
             
             const fotoWidth = (contentWidth - 10) / 3;
@@ -3278,9 +3278,13 @@ async function exportPDF(id) {
         }
         
         // Salva PDF
-        const cantiereNome = (g.cantiere || 'Cantiere').replace(/[^a-z0-9]/gi, '_');
-        const dataStr = formatDate(g.data).replace(/\//g, '-');
-        const filename = `Giornale_${cantiereNome}_${dataStr}.pdf`;
+        const codiceSitoPDF  = (cant?.codiceSito  || 'X').replace(/[^a-z0-9]/gi, '_');
+        const codiceProgPDF  = (cant?.codiceProgetto || 'X').replace(/[^a-z0-9]/gi, '_');
+        // Comune = prima parte della località (prima della virgola)
+        const localitaRaw    = (g.title || '').split(',')[0].trim();
+        const localitaPDF    = (localitaRaw || 'X').replace(/[^a-z0-9]/gi, '_');
+        const dataStrPDF     = formatDate(g.data).replace(/\//g, '-');
+        const filename = `Gdl_${codiceSitoPDF}_${codiceProgPDF}_${localitaPDF}_${dataStrPDF}.pdf`;
         doc.save(filename);
         
         console.log(`✅ PDF salvato: ${filename}`);
@@ -3406,7 +3410,14 @@ async function generaPDFMensile(cantiere, mese, giornali) {
     }
     
     // Salva PDF
-    const nomeFile = `GiornaliLavori_${cantiere.title.replace(/[^a-z0-9]/gi, '_')}_${mese}.pdf`;
+    const codiceSitoM  = (cantiere.codiceSito  || 'X').replace(/[^a-z0-9]/gi, '_');
+    const codiceProgM  = (cantiere.codiceProgetto || 'X').replace(/[^a-z0-9]/gi, '_');
+    // Comune dal primo giornale del mese (prima parte della località)
+    const firstLoc     = giornali[0]?.title || '';
+    const comuneRaw    = firstLoc.split(',')[0].trim();
+    const comuneM      = (comuneRaw || 'X').replace(/[^a-z0-9]/gi, '_');
+    const [annoM, meseNumM] = mese.split('-');
+    const nomeFile = `Gdl_${codiceSitoM}_${codiceProgM}_${comuneM}_${meseNumM}_${annoM}.pdf`;
     doc.save(nomeFile);
 }
 
@@ -3443,7 +3454,7 @@ async function creaGiornalePDF(doc, g, cantiere, numero, totale, nomeMese) {
     
     // Logo Akhet in alto a destra
     try {
-        doc.addImage(logoBase64, 'PNG', pageWidth - margin - 14, y + 2, 13.6, 15);
+        doc.addImage(logoBase64, 'PNG', pageWidth - margin - 18, y + 2, 13.6, 15);
     } catch (e) {
         console.warn('Errore nel caricamento logo:', e);
     }
@@ -3504,14 +3515,14 @@ async function creaGiornalePDF(doc, g, cantiere, numero, totale, nomeMese) {
     
     doc.setFont(undefined, 'bold');
     doc.setFontSize(8);
-    doc.text('LOCALITÀ', col4_1 + 2, y + 5);
-    doc.text('DATA', col4_2 + 2, y + 5);
+    doc.text('CODICE SITO', col4_1 + 2, y + 5);
+    doc.text('LOCALITÀ', col4_2 + 2, y + 5);
     doc.text('CONDIZIONI METEO', col4_3 + 2, y + 5);
     doc.text('AGIBILITÀ', col4_4 + 2, y + 5);
     
     doc.setFont(undefined, 'normal');
-    doc.text(String(g.title || ''), col4_1 + 2, y + rowHeight + 5);
-    doc.text(formatDate(g.data), col4_2 + 2, y + rowHeight + 5);
+    doc.text(String(cantiere?.codiceSito || ''), col4_1 + 2, y + rowHeight + 5);
+    doc.text(String(g.title || ''), col4_2 + 2, y + rowHeight + 5);
     doc.text(String(g.meteo || ''), col4_3 + 2, y + rowHeight + 5);
     doc.text(String(g.agibilita || ''), col4_4 + 2, y + rowHeight + 5);
     
@@ -3579,18 +3590,18 @@ async function creaGiornalePDF(doc, g, cantiere, numero, totale, nomeMese) {
     doc.text('DESCRIZIONE DELLE ATTIVITÀ', margin, y);
     y += 5;
     
-    const lavoriLines = doc.splitTextToSize(g.lavori || '', contentWidth - 4);
-    const lavoriHeight = Math.max(30, lavoriLines.length * 4 + 8);
+    const lavoriLines = doc.splitTextToSize(g.lavori || '', contentWidth - 6);
+    const lavoriHeight = Math.max(30, lavoriLines.length * 4.5 + 6);
     
     doc.rect(margin, y, contentWidth, lavoriHeight);
     
     doc.setFont(undefined, 'normal');
     doc.setFontSize(8);
-    let textY = y + 4;
+    let textY = y + 5;
     lavoriLines.forEach(line => {
         if (textY < y + lavoriHeight - 2) {
-            doc.text(line, margin + 2, textY);
-            textY += 4;
+            doc.text(line, margin + 3, textY);
+            textY += 4.5;
         }
     });
     doc.setFontSize(9);
@@ -3606,7 +3617,7 @@ async function creaGiornalePDF(doc, g, cantiere, numero, totale, nomeMese) {
         }
         
         doc.setFont(undefined, 'bold');
-        doc.text('IMMAGINI FOTOGRAFICHE', margin, y);
+        doc.text('FOTOGRAFIE', margin, y);
         y += 5;
         
         const fotoWidth = (contentWidth - 10) / 3;

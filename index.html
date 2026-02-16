@@ -69,8 +69,8 @@ h2{margin-bottom:20px}
 h3{margin-bottom:15px}
 .form-group{margin-bottom:15px}
 label{display:block;font-weight:600;margin-bottom:5px;text-align:left}
-input,select,textarea{width:100%;padding:10px;border:1px solid #ddd;border-radius:5px;font-size:14px}
-textarea{min-height:120px;font-family:inherit}
+input,select,textarea{width:100%;padding:10px;border:1px solid #ddd;border-radius:5px;font-size:14px;box-sizing:border-box}
+textarea{min-height:120px;font-family:inherit;overflow:hidden;resize:none}
 .btn{padding:10px 20px;border:none;border-radius:5px;cursor:pointer;font-size:14px;font-weight:600;margin:5px;transition:opacity 0.3s}
 .btn:hover{opacity:0.8}
 .btn:disabled{opacity:0.5;cursor:not-allowed}
@@ -339,7 +339,7 @@ Esporta report mensile in PDF o tutti i punti mappa in GeoJSON per un cantiere
 
 <div class="form-group">
 <label>Lavori *</label>
-<textarea id="fLav" required placeholder="Descrivi i lavori effettuati..."></textarea>
+<textarea id="fLav" required placeholder="Descrivi i lavori effettuati..." oninput="autoResize(this)"></textarea>
 </div>
 
 <div class="form-group">
@@ -708,7 +708,7 @@ Esporta report mensile in PDF o tutti i punti mappa in GeoJSON per un cantiere
 
 <div class="form-group">
 <label>Lavori *</label>
-<textarea id="editLavori" rows="6" required placeholder="Descrivi i lavori effettuati..."></textarea>
+<textarea id="editLavori" rows="6" required placeholder="Descrivi i lavori effettuati..." oninput="autoResize(this)"></textarea>
 </div>
 
 <div class="form-group">
@@ -1628,6 +1628,12 @@ function displayGiornali() {
 // ========================================
 // UTILITY FUNCTIONS
 // ========================================
+
+// Auto-resize textarea
+function autoResize(textarea) {
+    textarea.style.height = 'auto'; // Reset
+    textarea.style.height = (textarea.scrollHeight) + 'px'; // Espandi
+}
 
 function parseJSON(str) {
     if (!str) return [];
@@ -3954,6 +3960,8 @@ async function editGiornale(id) {
     document.getElementById('editMeteo').value = g.meteo || '';
     document.getElementById('editAgibilita').value = g.agibilita || '';
     document.getElementById('editLavori').value = g.lavori || '';
+    // Espandi textarea alla dimensione corretta
+    autoResize(document.getElementById('editLavori'));
     
     // Popola ResponsabileEnte dal cantiere (non dal giornale)
     const cantiere = cantieriData.find(c => c.id == g.cantiereId);

@@ -2808,8 +2808,13 @@ async function loadAllFoto() {
         
         // Raggruppa foto per giornale
         giornaliData.forEach(g => {
+            // Carica tutte le foto che iniziano con giornale_${id}_ indipendentemente dal pattern
             const gFoto = files.value
-                .filter(f => f.name.startsWith(`giornale_${g.id}_foto_`))
+                .filter(f => {
+                    // Pattern: giornale_123_foto_1.jpg OPPURE giornale_123_foto_1234567890.jpg
+                    const prefix = `giornale_${g.id}_`;
+                    return f.name.startsWith(prefix) && f.name.includes('foto');
+                })
                 .map(f => f['@microsoft.graph.downloadUrl']);
             
             if (gFoto.length > 0) {
@@ -4448,10 +4453,11 @@ async function saveEditGiornale() {
         // 2b. Upload nuove foto
         if (editFotoNuove.length > 0) {
             btnSave.textContent = '⏳ Upload foto...';
+            
             for (let i = 0; i < editFotoNuove.length; i++) {
                 const fotoObj = editFotoNuove[i];
-                const timestamp = Date.now();
-                const filename = `giornale_${editingGiornaleId}_${timestamp}_${i + 1}.jpg`;
+                const timestamp = Date.now() + i; // Aggiungi i per evitare duplicati
+                const filename = `giornale_${editingGiornaleId}_foto_${timestamp}.jpg`;
                 
                 try {
                     const uploadResponse = await fetch(
@@ -4468,6 +4474,8 @@ async function saveEditGiornale() {
                     
                     if (uploadResponse.ok) {
                         console.log(`📸 Foto caricata: ${filename}`);
+                    } else {
+                        console.error(`❌ Errore upload ${filename}: ${uploadResponse.status}`);
                     }
                 } catch (e) {
                     console.error(`Errore nell'upload di foto ${i + 1}:`, e);
@@ -4505,7 +4513,9 @@ async function saveEditGiornale() {
             filtG.lavori = lavori;
         }
         
-        // 4. Ricarica le foto per aggiornare la cache
+        // 4. Ricarica le foto per aggiornare la cache (con delay per SharePoint)
+        btnSave.textContent = '⏳ Aggiornamento...';
+        await new Promise(resolve => setTimeout(resolve, 1500)); // Delay per indicizzazione SharePoint
         await loadAllFoto();
         
         closeEditGiornale();

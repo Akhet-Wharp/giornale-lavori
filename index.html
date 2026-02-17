@@ -892,9 +892,7 @@ let editArcheologi = [];
 let editOperai = [];
 
 // Gestione foto nel modal edit
-let editFotoEsistenti = []; // Foto già su SharePoint { name, url }
-let editFotoNuove = []; // File nuovi da uploadare
-let editFotoEliminate = []; // Nomi file da eliminare
+let editFotoList = []; // Array unificato: [{ url/preview, isNew: bool, file? }]
 
 // ========================================
 // FUNZIONE HELPER: CANTIERI ASSEGNATI
@@ -3954,9 +3952,7 @@ async function editGiornale(id) {
     // Reset arrays
     editArcheologi = g.archeologi ? [...g.archeologi] : [];
     editOperai = g.operai ? [...g.operai] : [];
-    editFotoEsistenti = [];
-    editFotoNuove = [];
-    editFotoEliminate = [];
+    editFotoList = [];
     
     // Popola il form
     document.getElementById('editLocalita').value = g.title || '';
@@ -4040,58 +4036,39 @@ async function editGiornale(id) {
 // Carica foto esistenti per il giornale
 async function loadEditFoto(giornaleId) {
     try {
-        // Uso la cache foto già caricata all'inizio
         const foto = fotoCache[giornaleId] || [];
+        console.log(`📸 Caricamento ${foto.length} foto esistenti per giornale ${giornaleId}`);
         
-        console.log(`📸 Trovate ${foto.length} foto in cache per giornale ${giornaleId}`);
-        
-        if (foto.length === 0) {
-            editFotoEsistenti = [];
-            return;
-        }
-        
-        // Converto gli URL in oggetti con nome fittizio
-        editFotoEsistenti = foto.map((url, idx) => ({
-            name: `giornale_${giornaleId}_${idx + 1}.jpg`,
+        // Popola array con foto esistenti (isNew: false)
+        editFotoList = foto.map(url => ({
             url: url,
-            id: null // Non abbiamo l'ID, ma possiamo ricavarlo al momento dell'eliminazione
+            isNew: false
         }));
         
-        console.log(`📸 Caricate ${editFotoEsistenti.length} foto esistenti per giornale ${giornaleId}`);
-        
     } catch (e) {
-        console.error('Errore nel caricamento foto:', e);
-        editFotoEsistenti = [];
+        console.error('Errore caricamento foto:', e);
+        editFotoList = [];
     }
 }
 
 // Renderizza foto nel modal edit
 function renderEditFoto() {
     const container = document.getElementById('editFotoContainer');
-    const totaleFoto = editFotoEsistenti.length + editFotoNuove.length;
+    const totaleFoto = editFotoList.length;
     
     let html = '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:15px;margin-top:10px">';
     
-    // Foto esistenti
-    editFotoEsistenti.forEach((foto, idx) => {
+    editFotoList.forEach((foto, idx) => {
+        const imgSrc = foto.isNew ? foto.preview : foto.url;
+        const borderStyle = foto.isNew ? 'border:2px dashed #4CAF50;background:#f1f8f4' : 'border:2px solid #ddd;background:#f9f9f9';
+        const label = foto.isNew ? '<p style="font-size:12px;color:#4CAF50;margin:5px 0">🆕 Nuova</p>' : '';
+        
         html += `
             <div style="text-align:center">
-                <div style="border:2px solid #ddd;border-radius:8px;padding:10px;min-height:150px;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#f9f9f9">
-                    <img src="${foto.url}" style="max-width:100%;max-height:120px;border-radius:5px;cursor:pointer;margin-bottom:10px" onclick="openLightbox('${foto.url}')">
-                    <button type="button" class="btn btn-danger small-btn" onclick="removeEditFotoEsistente(${idx})">🗑️ Elimina</button>
-                </div>
-            </div>
-        `;
-    });
-    
-    // Foto nuove
-    editFotoNuove.forEach((foto, idx) => {
-        html += `
-            <div style="text-align:center">
-                <div style="border:2px dashed #4CAF50;border-radius:8px;padding:10px;min-height:150px;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#f1f8f4">
-                    <img src="${foto.preview}" style="max-width:100%;max-height:120px;border-radius:5px;margin-bottom:10px">
-                    <p style="font-size:12px;color:#4CAF50;margin:5px 0">🆕 Nuova</p>
-                    <button type="button" class="btn btn-danger small-btn" onclick="removeEditFotoNuova(${idx})">🗑️ Rimuovi</button>
+                <div style="${borderStyle};border-radius:8px;padding:10px;min-height:150px;display:flex;flex-direction:column;align-items:center;justify-content:center">
+                    <img src="${imgSrc}" style="max-width:100%;max-height:120px;border-radius:5px;cursor:pointer;margin-bottom:10px" onclick="openLightbox('${imgSrc}')">
+                    ${label}
+                    <button type="button" class="btn btn-danger small-btn" onclick="removeFoto(${idx})">🗑️ Elimina</button>
                 </div>
             </div>
         `;
@@ -4099,7 +4076,7 @@ function renderEditFoto() {
     
     html += '</div>';
     
-    // Info sul numero di foto
+    // Info
     if (totaleFoto > 0) {
         html += `<p style="color:#666;font-size:14px;margin-top:10px">📸 ${totaleFoto}/3 foto</p>`;
     } else {
@@ -4108,7 +4085,7 @@ function renderEditFoto() {
     
     container.innerHTML = html;
     
-    // Abilita/disabilita pulsante aggiungi
+    // Controllo limite
     const btnAdd = document.getElementById('btnAddEditFoto');
     if (totaleFoto >= 3) {
         btnAdd.disabled = true;
@@ -4121,13 +4098,11 @@ function renderEditFoto() {
 
 // Aggiungi nuova foto nel modal edit
 function addEditFoto() {
-    const totaleFoto = editFotoEsistenti.length + editFotoNuove.length;
-    if (totaleFoto >= 3) {
+    if (editFotoList.length >= 3) {
         alert('⚠️ Massimo 3 foto per giornale!');
         return;
     }
     
-    // Crea input file nascosto
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = 'image/*';
@@ -4137,22 +4112,21 @@ function addEditFoto() {
         if (!file) return;
         
         try {
-            // Comprimi immagine
             const compressed = await compImg(file);
             
-            // Crea preview
             const reader = new FileReader();
             reader.onload = (e) => {
-                editFotoNuove.push({
+                editFotoList.push({
                     file: compressed,
-                    preview: e.target.result
+                    preview: e.target.result,
+                    isNew: true
                 });
                 renderEditFoto();
             };
             reader.readAsDataURL(compressed);
             
         } catch (e) {
-            console.error('Errore nella compressione:', e);
+            console.error('Errore compressione:', e);
             alert('❌ Errore nel caricamento della foto');
         }
     };
@@ -4160,20 +4134,10 @@ function addEditFoto() {
     input.click();
 }
 
-// Rimuovi foto esistente (marca per eliminazione)
-function removeEditFotoEsistente(idx) {
-    if (!confirm('Vuoi eliminare questa foto?\n\nL\'eliminazione sarà effettiva al salvataggio.')) return;
-    
-    const foto = editFotoEsistenti[idx];
-    // Salvo l'URL per trovare il file dopo
-    editFotoEliminate.push(foto.url);
-    editFotoEsistenti.splice(idx, 1);
-    renderEditFoto();
-}
-
-// Rimuovi foto nuova (non ancora caricata)
-function removeEditFotoNuova(idx) {
-    editFotoNuove.splice(idx, 1);
+// Rimuovi foto dall'array (sia esistenti che nuove)
+function removeFoto(idx) {
+    if (!confirm('Vuoi eliminare questa foto?')) return;
+    editFotoList.splice(idx, 1);
     renderEditFoto();
 }
 
@@ -4290,9 +4254,7 @@ function closeEditGiornale() {
     editingGiornaleId = null;
     editArcheologi = [];
     editOperai = [];
-    editFotoEsistenti = [];
-    editFotoNuove = [];
-    editFotoEliminate = [];
+    editFotoList = [];
 }
 
 // Salva modifiche giornale
@@ -4406,58 +4368,48 @@ async function saveEditGiornale() {
         
         console.log(`✏️ Giornale ${editingGiornaleId} modificato`);
         
-        // 2. Gestione foto
+        // 2. Gestione foto SEMPLIFICATA: elimina TUTTE le vecchie, carica SOLO quelle nell'array
         const driveId = await getDriveId();
         const folderId = await getFotoFolderId(driveId);
         
-        // 2a. Elimina foto marchiate per eliminazione
-        if (editFotoEliminate.length > 0) {
-            btnSave.textContent = '⏳ Eliminazione foto...';
-            
-            // Carica tutti i file della cartella
+        // 2a. Elimina TUTTE le vecchie foto del giornale
+        btnSave.textContent = '⏳ Eliminazione foto vecchie...';
+        try {
             const searchResponse = await fetch(
                 `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${folderId}/children`,
-                {
-                    headers: { 'Authorization': `Bearer ${accessToken}` }
-                }
+                { headers: { 'Authorization': `Bearer ${accessToken}` } }
             );
-            
             const searchData = await searchResponse.json();
             const prefix = `giornale_${editingGiornaleId}_`;
             
-            // Per ogni URL da eliminare, trova il file corrispondente
-            for (const url of editFotoEliminate) {
+            // Trova ed elimina TUTTI i file di questo giornale
+            const vecchieFoto = searchData.value.filter(f => f.name.startsWith(prefix));
+            for (const file of vecchieFoto) {
                 try {
-                    // Cerca il file che corrisponde a questo URL
-                    const file = searchData.value.find(f => {
-                        const downloadUrl = f['@microsoft.graph.downloadUrl'];
-                        return downloadUrl === url || f.name.startsWith(prefix);
-                    });
-                    
-                    if (file) {
-                        await fetch(
-                            `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${file.id}`,
-                            {
-                                method: 'DELETE',
-                                headers: { 'Authorization': `Bearer ${accessToken}` }
-                            }
-                        );
-                        console.log(`🗑️ Foto eliminata: ${file.name}`);
-                    }
+                    await fetch(
+                        `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${file.id}`,
+                        {
+                            method: 'DELETE',
+                            headers: { 'Authorization': `Bearer ${accessToken}` }
+                        }
+                    );
+                    console.log(`🗑️ Foto eliminata: ${file.name}`);
                 } catch (e) {
-                    console.error(`Errore nell'eliminazione di foto:`, e);
+                    console.error(`Errore eliminazione ${file.name}:`, e);
                 }
             }
+        } catch (e) {
+            console.warn('Errore eliminazione foto vecchie:', e);
         }
         
-        // 2b. Upload nuove foto
-        if (editFotoNuove.length > 0) {
-            btnSave.textContent = '⏳ Upload foto...';
+        // 2b. Carica SOLO le foto nuove (quelle con isNew: true)
+        const fotoNuoveDaCaricare = editFotoList.filter(f => f.isNew && f.file);
+        if (fotoNuoveDaCaricare.length > 0) {
+            btnSave.textContent = '⏳ Upload nuove foto...';
             
-            for (let i = 0; i < editFotoNuove.length; i++) {
-                const fotoObj = editFotoNuove[i];
-                const timestamp = Date.now() + i; // Aggiungi i per evitare duplicati
-                const filename = `giornale_${editingGiornaleId}_foto_${timestamp}.jpg`;
+            for (let i = 0; i < fotoNuoveDaCaricare.length; i++) {
+                const fotoObj = fotoNuoveDaCaricare[i];
+                const filename = `giornale_${editingGiornaleId}_foto_${i + 1}.jpg`;
                 
                 try {
                     const uploadResponse = await fetch(
@@ -4478,7 +4430,7 @@ async function saveEditGiornale() {
                         console.error(`❌ Errore upload ${filename}: ${uploadResponse.status}`);
                     }
                 } catch (e) {
-                    console.error(`Errore nell'upload di foto ${i + 1}:`, e);
+                    console.error(`Errore upload foto ${i + 1}:`, e);
                 }
             }
         }

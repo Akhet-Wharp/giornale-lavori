@@ -4017,7 +4017,7 @@ async function creaGiornalePDF(doc, g, cantiere, numero, totale, nomeMese) {
     // Info sotto al titolo  
     doc.setFontSize(9);
     doc.setFont(undefined, 'normal');
-    doc.text(`${nomeMese} - ${numero}/${totale}`, margin + 3, y + 13);
+    doc.text(`${nomeMese}  |  Pag. ${numero}/${totale}  |  Data: ${formatDate(g.data)}`, margin + 3, y + 13);
     
     // Logo Akhet in alto a destra
     try {
@@ -4061,12 +4061,15 @@ async function creaGiornalePDF(doc, g, cantiere, numero, totale, nomeMese) {
     
     y += rowHeight * 2 + 3;
     
-    // === RIGA 2: LOCALITÀ | CODICE SITO | CONDIZIONI METEO | AGIBILITÀ ===
-    const col4Width = contentWidth / 4;
+    // === RIGA 2: CODICE SITO | LOCALITÀ | CONDIZIONI METEO | AGIBILITÀ ===
+    const col4_1_width = contentWidth * 0.15; // 15% - Codice Sito
+    const col4_2_width = contentWidth * 0.45; // 45% - Località
+    const col4_3_width = contentWidth * 0.25; // 25% - Meteo
+    const col4_4_width = contentWidth * 0.15; // 15% - Agibilità
     const col4_1 = margin;
-    const col4_2 = margin + col4Width;
-    const col4_3 = margin + col4Width * 2;
-    const col4_4 = margin + col4Width * 3;
+    const col4_2 = margin + col4_1_width;
+    const col4_3 = margin + col4_1_width + col4_2_width;
+    const col4_4 = margin + col4_1_width + col4_2_width + col4_3_width;
     
     doc.rect(col4_1, y, contentWidth, rowHeight * 2);
     doc.line(col4_2, y, col4_2, y + rowHeight * 2);
@@ -4075,10 +4078,10 @@ async function creaGiornalePDF(doc, g, cantiere, numero, totale, nomeMese) {
     doc.line(col4_1, y + rowHeight, col4_1 + contentWidth, y + rowHeight);
     
     doc.setFillColor(...headerBg);
-    doc.rect(col4_1, y, col4Width, rowHeight, 'F');
-    doc.rect(col4_2, y, col4Width, rowHeight, 'F');
-    doc.rect(col4_3, y, col4Width, rowHeight, 'F');
-    doc.rect(col4_4, y, col4Width, rowHeight, 'F');
+    doc.rect(col4_1, y, col4_1_width, rowHeight, 'F');
+    doc.rect(col4_2, y, col4_2_width, rowHeight, 'F');
+    doc.rect(col4_3, y, col4_3_width, rowHeight, 'F');
+    doc.rect(col4_4, y, col4_4_width, rowHeight, 'F');
     
     doc.setFont(undefined, 'bold');
     doc.setFontSize(8);
@@ -4089,110 +4092,132 @@ async function creaGiornalePDF(doc, g, cantiere, numero, totale, nomeMese) {
     
     doc.setFont(undefined, 'normal');
     doc.text(String(cantiere?.codiceSito || ''), col4_1 + 2, y + rowHeight + 5);
-    doc.text(String(g.title || ''), col4_2 + 2, y + rowHeight + 5);
+    const locLines2 = doc.splitTextToSize(String(g.title || ''), col4_2_width - 4);
+    doc.text(locLines2[0] || '', col4_2 + 2, y + rowHeight + 5);
     doc.text(String(g.meteo || ''), col4_3 + 2, y + rowHeight + 5);
     doc.text(String(g.agibilita || ''), col4_4 + 2, y + rowHeight + 5);
     
     doc.setFontSize(9);
     y += rowHeight * 2 + 5;
     
-    // === ELENCO PERSONALE AKHET ===
+    // === ELENCO PERSONALE AKHET (5 colonne: arch 25% | ore 5% | op 25% | ore 5% | visite 40%) ===
     doc.setFont(undefined, 'bold');
     doc.text('ELENCO PERSONALE AKHET', margin, y);
     y += 5;
     
     const maxRows = Math.max(
         g.archeologi ? g.archeologi.length : 0,
-        g.operai ? g.operai.length : 0
+        g.operai ? g.operai.length : 0,
+        1
     );
     const personaleHeight = rowHeight + (maxRows * 5);
     
+    // Larghezze colonne
+    const pW = contentWidth;
+    const c1w = pW * 0.25; // ARCHEOLOGI
+    const c2w = pW * 0.05; // ORE arch
+    const c3w = pW * 0.25; // OPERAI
+    const c4w = pW * 0.05; // ORE op
+    const c5w = pW * 0.40; // VISITE
+    const c1x = margin;
+    const c2x = c1x + c1w;
+    const c3x = c2x + c2w;
+    const c4x = c3x + c3w;
+    const c5x = c4x + c4w;
+    
+    // Bordo esterno e riga header
     doc.rect(margin, y, contentWidth, personaleHeight);
-    doc.line(margin + contentWidth / 2, y, margin + contentWidth / 2, y + personaleHeight);
     doc.line(margin, y + rowHeight, margin + contentWidth, y + rowHeight);
+    // Linee verticali
+    doc.line(c2x, y, c2x, y + personaleHeight);
+    doc.line(c3x, y, c3x, y + personaleHeight);
+    doc.line(c4x, y, c4x, y + personaleHeight);
+    doc.line(c5x, y, c5x, y + personaleHeight);
     
+    // Header grigio
     doc.setFillColor(...headerBg);
-    doc.rect(margin, y, contentWidth / 2, rowHeight, 'F');
-    doc.rect(margin + contentWidth / 2, y, contentWidth / 2, rowHeight, 'F');
-    
-    const archColWidth = (contentWidth / 2) * 0.75;
-    const oreColWidth = (contentWidth / 2) * 0.25;
-    
-    doc.line(margin + archColWidth, y, margin + archColWidth, y + personaleHeight);
-    doc.line(margin + contentWidth / 2 + archColWidth, y, margin + contentWidth / 2 + archColWidth, y + personaleHeight);
+    doc.rect(c1x, y, c1w, rowHeight, 'F');
+    doc.rect(c2x, y, c2w, rowHeight, 'F');
+    doc.rect(c3x, y, c3w, rowHeight, 'F');
+    doc.rect(c4x, y, c4w, rowHeight, 'F');
+    doc.rect(c5x, y, c5w, rowHeight, 'F');
     
     doc.setFont(undefined, 'bold');
-    doc.text('ARCHEOLOGI', margin + 2, y + 5);
-    doc.text('ORE', margin + archColWidth + 2, y + 5);
-    doc.text('OPERAI', margin + contentWidth / 2 + 2, y + 5);
-    doc.text('ORE', margin + contentWidth / 2 + archColWidth + 2, y + 5);
+    doc.setFontSize(8);
+    doc.text('ARCHEOLOGI', c1x + 2, y + 5);
+    doc.text('ORE', c2x + 1, y + 5);
+    doc.text('OPERAI', c3x + 2, y + 5);
+    doc.text('ORE', c4x + 1, y + 5);
+    doc.text('VISITE', c5x + 2, y + 5);
     
     doc.setFont(undefined, 'normal');
+    doc.setFontSize(7);
+    
+    // Righe dati
+    const rowH = maxRows > 0 ? (personaleHeight - rowHeight) / maxRows : (personaleHeight - rowHeight);
+    const visiteText = (g.visite || '').trim();
+    const visiteLines = doc.splitTextToSize(visiteText, c5w - 4);
     let rowY = y + rowHeight + 4;
     
     for (let i = 0; i < maxRows; i++) {
+        const rowTop = y + rowHeight + i * rowH;
+        const rowBot = rowTop + rowH;
+        
         if (g.archeologi && i < g.archeologi.length) {
             const a = g.archeologi[i];
             const nome = typeof a === 'string' ? a : a.nome;
-            const ore = typeof a === 'string' ? '' : String(a.ore);
-            doc.text(nome, margin + 2, rowY);
-            doc.text(ore, margin + archColWidth + 2, rowY);
+            const ore = typeof a === 'string' ? '' : String(a.ore || '');
+            doc.text(String(nome || ''), c1x + 2, rowY);
+            doc.text(String(ore), c2x + 1, rowY);
         }
         
         if (g.operai && i < g.operai.length) {
             const o = g.operai[i];
             const nome = typeof o === 'string' ? o : o.nome;
-            const ore = typeof o === 'string' ? '' : String(o.ore);
-            doc.text(nome, margin + contentWidth / 2 + 2, rowY);
-            doc.text(ore, margin + contentWidth / 2 + archColWidth + 2, rowY);
+            const ore = typeof o === 'string' ? '' : String(o.ore || '');
+            doc.text(String(nome || ''), c3x + 2, rowY);
+            doc.text(String(ore), c4x + 1, rowY);
+        } else {
+            // Barre diagonali nelle celle operai/ore vuote
+            doc.setDrawColor(180, 180, 180);
+            doc.setLineWidth(0.3);
+            doc.line(c3x, rowTop, c3x + c3w, rowBot);
+            doc.line(c4x, rowTop, c4x + c4w, rowBot);
+            doc.setDrawColor(0, 0, 0);
+        }
+        
+        // Visite: scrivi solo sulla prima riga, testo wrappato
+        if (i === 0 && visiteLines.length > 0) {
+            let vY = rowY;
+            visiteLines.forEach(line => {
+                if (vY < y + personaleHeight - 2) {
+                    doc.text(line, c5x + 2, vY);
+                    vY += 3.8;
+                }
+            });
         }
         
         rowY += 5;
     }
     
+    doc.setFontSize(9);
     y += personaleHeight + 5;
     
-    // === VISITE ===
-    const visiteText = (g.visite || '').trim();
-    if (visiteText) {
-        doc.setFont(undefined, 'bold');
-        doc.text('VISITE', margin, y);
-        y += 5;
-        
-        const visiteLines = doc.splitTextToSize(visiteText, contentWidth - 6);
-        const visiteHeight = Math.max(15, visiteLines.length * 4.5 + 6);
-        
-        doc.rect(margin, y, contentWidth, visiteHeight);
-        
-        doc.setFont(undefined, 'normal');
-        doc.setFontSize(8);
-        let textY = y + 5;
-        visiteLines.forEach(line => {
-            if (textY < y + visiteHeight - 2) {
-                doc.text(line, margin + 3, textY);
-                textY += 4.5;
-            }
-        });
-        doc.setFontSize(9);
-        
-        y += visiteHeight + 5;
-    }
-    
-    // === DESCRIZIONE DELLE ATTIVITÀ ===
+    // === DESCRIZIONE ATTIVITÀ ===
     doc.setFont(undefined, 'bold');
-    doc.text('DESCRIZIONE DELLE ATTIVITÀ', margin, y);
+    doc.setFontSize(9);
+    doc.text('DESCRIZIONE ATTIVITÀ', margin, y);
     y += 5;
-    
-    const lavoriLines = doc.splitTextToSize(g.lavori || '', contentWidth - 6);
-    const lavoriHeight = Math.max(30, lavoriLines.length * 4.5 + 6);
-    
-    doc.rect(margin, y, contentWidth, lavoriHeight);
     
     doc.setFont(undefined, 'normal');
     doc.setFontSize(8);
+    const lavoriLines = doc.splitTextToSize(g.lavori || '', contentWidth - 6);
+    const lavoriHeight = Math.max(30, lavoriLines.length * 4.5 + 8);
+    doc.rect(margin, y, contentWidth, lavoriHeight);
+    
     let textY = y + 5;
     lavoriLines.forEach(line => {
-        if (textY < y + lavoriHeight - 2) {
+        if (textY < y + lavoriHeight - 3) {
             doc.text(line, margin + 3, textY);
             textY += 4.5;
         }
@@ -4230,6 +4255,39 @@ async function creaGiornalePDF(doc, g, cantiere, numero, totale, nomeMese) {
         y += fotoHeight + 8;
     }
     
+    // === PUNTO DI INTERESSE ===
+    if (g.puntoMappa && g.puntoMappa.lat && g.puntoMappa.lng) {
+        if (y > 220) { doc.addPage(); y = 15; }
+        doc.setFont(undefined, 'bold');
+        doc.setFontSize(8);
+        doc.text('LOCALIZZAZIONE', margin, y);
+        y += 4;
+        
+        const puntoHeight = 12;
+        doc.rect(margin, y, contentWidth, puntoHeight);
+        doc.line(margin, y + 4, margin + contentWidth, y + 4);
+        
+        doc.setFont(undefined, 'bold');
+        doc.setFontSize(7);
+        doc.text('Nome:', margin + 2, y + 3);
+        doc.text('Coordinate:', margin + 2, y + 9);
+        
+        doc.setFont(undefined, 'normal');
+        const puntoNome = doc.splitTextToSize(String(g.puntoMappa.nome || 'N/A'), contentWidth - 20);
+        doc.text(puntoNome[0], margin + 15, y + 3);
+        
+        const coords = `${g.puntoMappa.lat.toFixed(5)}, ${g.puntoMappa.lng.toFixed(5)}`;
+        doc.text(coords, margin + 27, y + 9);
+        
+        const osmLink = `https://www.openstreetmap.org/?mlat=${g.puntoMappa.lat}&mlon=${g.puntoMappa.lng}&zoom=16`;
+        doc.setTextColor(0, 0, 255);
+        doc.setFontSize(6);
+        doc.textWithLink('Visualizza su OpenStreetMap', margin + 27 + coords.length * 1.2, y + 9, { url: osmLink });
+        doc.setTextColor(0, 0, 0);
+        
+        y += puntoHeight + 5;
+    }
+    
     // === FIRME IN FONDO ===
     if (y > 240) {
         doc.addPage();
@@ -4239,39 +4297,29 @@ async function creaGiornalePDF(doc, g, cantiere, numero, totale, nomeMese) {
     }
     
     const firmeColWidth = contentWidth / 3;
+    const firmeHeight = 10;
     
-    doc.rect(margin, y, contentWidth, rowHeight * 3);
-    doc.line(margin + firmeColWidth, y, margin + firmeColWidth, y + rowHeight * 3);
-    doc.line(margin + firmeColWidth * 2, y, margin + firmeColWidth * 2, y + rowHeight * 3);
-    doc.line(margin, y + rowHeight, margin + contentWidth, y + rowHeight);
+    doc.rect(margin, y, contentWidth, firmeHeight);
+    doc.line(margin + firmeColWidth, y, margin + firmeColWidth, y + firmeHeight);
+    doc.line(margin + firmeColWidth * 2, y, margin + firmeColWidth * 2, y + firmeHeight);
+    doc.line(margin, y + 3, margin + contentWidth, y + 3);
     
     doc.setFillColor(...headerBg);
-    doc.rect(margin, y, contentWidth, rowHeight, 'F');
+    doc.rect(margin, y, firmeColWidth, 3, 'F');
+    doc.rect(margin + firmeColWidth, y, firmeColWidth, 3, 'F');
+    doc.rect(margin + firmeColWidth * 2, y, firmeColWidth, 3, 'F');
     
     doc.setFont(undefined, 'bold');
-    doc.setFontSize(8);
-    doc.text('ARCHEOLOGO RESPONSABILE', margin + firmeColWidth / 2, y + 5, { align: 'center' });
-    doc.text('DIRETTORE LAVORI', margin + firmeColWidth + firmeColWidth / 2, y + 5, { align: 'center' });
-    doc.text('SOVRINTENDENZA', margin + firmeColWidth * 2 + firmeColWidth / 2, y + 5, { align: 'center' });
+    doc.setFontSize(7);
+    doc.text('Responsabile Ente', margin + 2, y + 2.5);
+    doc.text('Archeologo sul campo', margin + firmeColWidth + 2, y + 2.5);
+    doc.text('Responsabile AKHET', margin + firmeColWidth * 2 + 2, y + 2.5);
     
     doc.setFont(undefined, 'normal');
-    doc.setFontSize(7);
-    
-    // Testo nome sotto firma
-    const firmeY = y + rowHeight * 2.5;
-    doc.text('NOME E COGNOME', margin + firmeColWidth / 2, firmeY, { align: 'center' });
-    doc.text('NOME E COGNOME', margin + firmeColWidth + firmeColWidth / 2, firmeY, { align: 'center' });
-    doc.text('NOME E COGNOME', margin + firmeColWidth * 2 + firmeColWidth / 2, firmeY, { align: 'center' });
-    
-    // Footer con autore e data creazione
-    doc.setFontSize(7);
-    doc.setTextColor(150, 150, 150);
-    doc.text(`Creato da ${g.author} il ${formatDate(g.created)}`, margin, 287);
-    
-    if (g.validato) {
-        doc.setTextColor(39, 174, 96);
-        doc.text('✓ VALIDATO', pageWidth - margin, 287, { align: 'right' });
-    }
+    doc.setFontSize(8);
+    doc.text(String(g.responsabileEnte || ''), margin + 2, y + 7);
+    doc.text(String(g.archeologoSulCampo || ''), margin + firmeColWidth + 2, y + 7);
+    doc.text(String(g.responsabileAkhet || ''), margin + firmeColWidth * 2 + 2, y + 7);
     
     doc.setTextColor(0, 0, 0);
 }
